@@ -13,59 +13,72 @@ mod hello_anchor {
         require!(!data.is_empty(), CustomError::EmptyData);
 
         ctx.accounts.new_account.title = title.clone().into_bytes(); // Store as Vec<u8>
-        ctx.accounts.new_account.data = data.clone().into_bytes();   // Store as Vec<u8>
+        ctx.accounts.new_account.data = data.clone().into_bytes(); // Store as Vec<u8>
 
         msg!("Initialized task with title: {}", title);
         Ok(())
     }
-    
 
     pub fn delete_task(ctx: Context<DeleteTask>) -> Result<()> {
         let task_title = String::from_utf8(ctx.accounts.task_account.title.clone())
             .map_err(|_| CustomError::InvalidTitleEncoding)?;
-        
+
+        // authority authentication
+        let owner = ctx.accounts.signer.key();
+        require_eq!(ctx.accounts.signer.key(), owner, CustomError::Unauthorized);
         require!(!task_title.is_empty(), CustomError::EmptyTitle);
         msg!("Proceeding to delete task with title: {}", task_title);
-        
+
         // Perform any necessary clean-up here before closing
+        ctx.accounts.task_account.title.clear();
+        ctx.accounts.task_account.data.clear();
+
         msg!("Data deleted successfully.");
-        
+
         Ok(())
     }
 
     pub fn read_task(ctx: Context<ReadTask>) -> Result<()> {
         let task_title = String::from_utf8(ctx.accounts.task_account.title.clone())
             .map_err(|_| CustomError::InvalidTitleEncoding)?;
-        
+
         require!(!task_title.is_empty(), CustomError::EmptyTitle);
         msg!("Fetching task with title: {}", task_title);
-        
+
         let task_data = String::from_utf8(ctx.accounts.task_account.data.clone())
             .map_err(|_| CustomError::InvalidDataEncoding)?;
-        
-        msg!("Retrieved successfully title: {:?}, data: {:?}", task_title, task_data);
-        
+
+        msg!(
+            "Retrieved successfully title: {:?}, data: {:?}",
+            task_title,
+            task_data
+        );
+
         Ok(())
     }
 
     pub fn update_task(ctx: Context<UpdateTask>, title: String, new_data: String) -> Result<()> {
         msg!("Updating task with title: {}", title);
-        
+
         let current_title = String::from_utf8(ctx.accounts.task_account.title.clone())
             .map_err(|_| CustomError::InvalidTitleEncoding)?;
-        
+
         require_eq!(current_title, title, CustomError::TitleMismatch);
         msg!("Title matches, proceeding to update data.");
-        
+
+        // authority authentication
+        let owner = ctx.accounts.signer.key();
+        require_eq!(ctx.accounts.signer.key(), owner, CustomError::Unauthorized);
+
         require!(!new_data.is_empty(), CustomError::EmptyData);
-        
+
         ctx.accounts.task_account.data = new_data.into_bytes();
         msg!("Data updated successfully.");
-        
+
         Ok(())
     }
-}
 
+}
 
 #[derive(Accounts)]
 #[instruction(title: String, data: String)]
@@ -130,7 +143,7 @@ impl TaskAccount {
     }
 }
 
-#[error_code] 
+#[error_code]
 pub enum CustomError {
     #[msg("The title provided does not match the existing task account.")]
     TitleMismatch,
@@ -142,5 +155,6 @@ pub enum CustomError {
     InvalidTitleEncoding,
     #[msg("The data encoding is invalid.")]
     InvalidDataEncoding,
+    #[msg("Onlyowner can invoke this function")]
+    Unauthorized,
 }
-
